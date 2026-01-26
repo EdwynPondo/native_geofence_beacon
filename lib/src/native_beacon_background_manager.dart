@@ -1,65 +1,52 @@
+import 'dart:async';
+
 import 'package:native_geofence/src/generated/platform_bindings.g.dart';
 import 'package:native_geofence/src/model/model_mapper.dart';
 import 'package:native_geofence/src/model/native_geofence_exception.dart';
 
 class NativeBeaconBackgroundManager {
-  /// Cached instance of [NativeBeaconBackgroundManager]
   static NativeBeaconBackgroundManager? _instance;
 
   /// The singleton instance of [NativeBeaconBackgroundManager].
   ///
-  /// Throws [NativeGeofenceException].
+  /// WARNING: Can only be accessed within Beacon callbacks. Trying to access
+  /// this anywhere else will throw an [AssertionError].
   static NativeBeaconBackgroundManager get instance {
-    try {
-      _instance ??= NativeBeaconBackgroundManager._();
-    } catch (e, stackTrace) {
-      throw NativeGeofenceExceptionMapper.fromError(e, stackTrace);
-    }
+    assert(
+        _instance != null,
+        'NativeBeaconBackgroundManager has not been initialized yet; '
+        'Are you running within a Beacon callback?');
     return _instance!;
   }
 
   final NativeBeaconBackgroundApi _api;
 
-  NativeBeaconBackgroundManager._() : _api = NativeBeaconBackgroundApi();
+  NativeBeaconBackgroundManager._(this._api);
 
-  /// Initialize the background API.
+  /// Promote the beacon callback to an Android foreground service.
   ///
-  /// This should be called from within the callback dispatcher.
+  /// Android only, has no effect on iOS (but is safe to call).
   ///
   /// Throws [NativeGeofenceException].
-  Future<void> initialize() async {
-    try {
-      _api.triggerApiInitialized();
-    } catch (e, stackTrace) {
-      throw NativeGeofenceExceptionMapper.fromError(e, stackTrace);
-    }
-  }
+  Future<void> promoteToForeground() async => _api
+      .promoteToForeground()
+      .catchError(NativeGeofenceExceptionMapper.catchError<void>);
 
-  /// Promote the background isolate to foreground.
+  /// Demote the beacon service from an Android foreground service to a
+  /// background service.
   ///
-  /// This can be used to show a foreground notification when a beacon event
-  /// occurs in the background.
+  /// Android only, has no effect on iOS (but is safe to call).
   ///
   /// Throws [NativeGeofenceException].
-  Future<void> promoteToForeground() async {
-    try {
-      _api.promoteToForeground();
-    } catch (e, stackTrace) {
-      throw NativeGeofenceExceptionMapper.fromError(e, stackTrace);
-    }
-  }
+  Future<void> demoteToBackground() async => _api
+      .demoteToBackground()
+      .catchError(NativeGeofenceExceptionMapper.catchError<void>);
+}
 
-  /// Demote the foreground isolate to background.
-  ///
-  /// This should be called after [promoteToForeground] when you no longer
-  /// need the foreground notification.
-  ///
-  /// Throws [NativeGeofenceException].
-  Future<void> demoteToBackground() async {
-    try {
-      _api.demoteToBackground();
-    } catch (e, stackTrace) {
-      throw NativeGeofenceExceptionMapper.fromError(e, stackTrace);
-    }
-  }
+/// Private method internal to plugin, do not use.
+Future<void> createNativeBeaconBackgroundManagerInstance() async {
+  final api = NativeBeaconBackgroundApi();
+  NativeBeaconBackgroundManager._instance =
+      NativeBeaconBackgroundManager._(api);
+  await api.triggerApiInitialized();
 }

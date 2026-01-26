@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:native_geofence/src/api/native_beacon_trigger_impl.dart';
 import 'package:native_geofence/src/api/native_geofence_trigger_impl.dart';
+import 'package:native_geofence/src/native_beacon_background_manager.dart';
 import 'package:native_geofence/src/native_geofence_background_manager.dart';
 
 @pragma('vm:entry-point')
@@ -15,4 +16,6 @@ void callbackDispatcher() {
   NativeBeaconTriggerImpl.ensureInitialized();
   // Create the NativeGeofenceBackgroundApi.
   createNativeGeofenceBackgroundManagerInstance();
+  // Create the NativeBeaconBackgroundApi.
+  createNativeBeaconBackgroundManagerInstance();
 }
