@@ -25,6 +25,12 @@ enum GeofenceEvent {
   dwell();
 }
 
+/// Bluetooth beacon events.
+enum BeaconEvent {
+  enter(),
+  exit();
+}
+
 class LocationWire {
   final double latitude;
   final double longitude;
@@ -149,6 +155,23 @@ enum NativeGeofenceErrorCode {
   /// This can happen if the callback function signature has changed or due to
   /// plugin contract changes.
   callbackInvalid,
+
+  /// The required Bluetooth permission was not granted.
+  ///
+  /// On Android we need: `BLUETOOTH_SCAN` (for API level 31+)
+  /// On iOS we need: `NSBluetoothAlwaysUsageDescription`
+  ///
+  /// Please use an external permission manager such as "permission_handler" to
+  /// request the permission from the user.
+  missingBluetoothPermission,
+
+  /// Bluetooth is not enabled on the device.
+  /// The user needs to enable Bluetooth in device settings.
+  bluetoothNotEnabled,
+
+  /// The beacon deletion failed because the beacon was not found.
+  /// This is safe to ignore.
+  beaconNotFound,
 }
 
 @HostApi()
@@ -184,4 +207,117 @@ abstract class NativeGeofenceBackgroundApi {
 abstract class NativeGeofenceTriggerApi {
   @async
   void geofenceTriggered(GeofenceCallbackParamsWire params);
+}
+
+// ============================================================================
+// Bluetooth Beacon API
+// ============================================================================
+
+class IosBeaconSettingsWire {
+  final bool initialTrigger;
+  final bool notifyEntryStateOnDisplay;
+
+  const IosBeaconSettingsWire({
+    required this.initialTrigger,
+    required this.notifyEntryStateOnDisplay,
+  });
+}
+
+class AndroidBeaconSettingsWire {
+  final List<BeaconEvent> initialTriggers;
+  final int scanPeriodMillis;
+  final int betweenScanPeriodMillis;
+
+  const AndroidBeaconSettingsWire({
+    required this.initialTriggers,
+    required this.scanPeriodMillis,
+    required this.betweenScanPeriodMillis,
+  });
+}
+
+class BeaconWire {
+  final String id;
+  final String uuid;
+  final int? major;
+  final int? minor;
+  final List<BeaconEvent> triggers;
+  final IosBeaconSettingsWire iosSettings;
+  final AndroidBeaconSettingsWire androidSettings;
+  final int callbackHandle;
+
+  const BeaconWire({
+    required this.id,
+    required this.uuid,
+    this.major,
+    this.minor,
+    required this.triggers,
+    required this.iosSettings,
+    required this.androidSettings,
+    required this.callbackHandle,
+  });
+}
+
+class ActiveBeaconWire {
+  final String id;
+  final String uuid;
+  final int? major;
+  final int? minor;
+  final List<BeaconEvent> triggers;
+  final AndroidBeaconSettingsWire? androidSettings;
+
+  const ActiveBeaconWire({
+    required this.id,
+    required this.uuid,
+    this.major,
+    this.minor,
+    required this.triggers,
+    required this.androidSettings,
+  });
+}
+
+class BeaconCallbackParamsWire {
+  final List<ActiveBeaconWire> beacons;
+  final BeaconEvent event;
+  final int callbackHandle;
+
+  const BeaconCallbackParamsWire({
+    required this.beacons,
+    required this.event,
+    required this.callbackHandle,
+  });
+}
+
+@HostApi()
+abstract class NativeBeaconApi {
+  void initialize({required int callbackDispatcherHandle});
+
+  @async
+  void createBeacon({required BeaconWire beacon});
+
+  void reCreateAfterReboot();
+
+  List<String> getBeaconIds();
+
+  List<ActiveBeaconWire> getBeacons();
+
+  @async
+  void removeBeaconById({required String id});
+
+  @async
+  void removeAllBeacons();
+}
+
+@HostApi()
+abstract class NativeBeaconBackgroundApi {
+  void triggerApiInitialized();
+
+  void promoteToForeground();
+
+  void demoteToBackground();
+}
+
+@FlutterApi()
+abstract class NativeBeaconTriggerApi {
+  @async
+  void beaconTriggered(BeaconCallbackParamsWire params);
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import 'package:native_geofence/src/generated/platform_bindings.g.dart';
+import 'package:native_geofence/src/model/beacon_models.dart';
 import 'package:native_geofence/src/model/model.dart';
 import 'package:native_geofence/src/model/native_geofence_exception.dart';
 
@@ -160,5 +161,111 @@ extension NativeGeofenceExceptionMapper on NativeGeofenceException {
 
   static T catchError<T>(dynamic error, StackTrace stacktrace) {
     throw fromError(error, stacktrace);
+  }
+}
+
+// ============================================================================
+// Beacon Mappers
+// ============================================================================
+
+extension IosBeaconSettingsMapper on IosBeaconSettings {
+  IosBeaconSettingsWire toWire() {
+    return IosBeaconSettingsWire(
+      initialTrigger: initialTrigger,
+      notifyEntryStateOnDisplay: notifyEntryStateOnDisplay,
+    );
+  }
+}
+
+extension IosBeaconSettingsWireMapper on IosBeaconSettingsWire {
+  IosBeaconSettings fromWire() {
+    return IosBeaconSettings(
+      initialTrigger: initialTrigger,
+      notifyEntryStateOnDisplay: notifyEntryStateOnDisplay,
+    );
+  }
+}
+
+extension AndroidBeaconSettingsMapper on AndroidBeaconSettings {
+  AndroidBeaconSettingsWire toWire() {
+    return AndroidBeaconSettingsWire(
+      initialTriggers: initialTriggers.toList(),
+      scanPeriodMillis: scanPeriod.inMilliseconds,
+      betweenScanPeriodMillis: betweenScanPeriod.inMilliseconds,
+    );
+  }
+}
+
+extension AndroidBeaconSettingsWireMapper on AndroidBeaconSettingsWire {
+  AndroidBeaconSettings fromWire() {
+    return AndroidBeaconSettings(
+      initialTriggers: initialTriggers.toSet(),
+      scanPeriod: Duration(milliseconds: scanPeriodMillis),
+      betweenScanPeriod: Duration(milliseconds: betweenScanPeriodMillis),
+    );
+  }
+}
+
+extension BeaconMapper on Beacon {
+  BeaconWire toWire(int callbackHandle) {
+    return BeaconWire(
+      id: id,
+      uuid: uuid,
+      major: major,
+      minor: minor,
+      triggers: triggers.toList(),
+      iosSettings: iosSettings.toWire(),
+      androidSettings: androidSettings.toWire(),
+      callbackHandle: callbackHandle,
+    );
+  }
+}
+
+extension BeaconWireMapper on BeaconWire {
+  Beacon fromWire() {
+    return Beacon(
+      id: id,
+      uuid: uuid,
+      major: major,
+      minor: minor,
+      triggers: triggers.toSet(),
+      iosSettings: iosSettings.fromWire(),
+      androidSettings: androidSettings.fromWire(),
+    );
+  }
+}
+
+extension ActiveBeaconMapper on ActiveBeacon {
+  ActiveBeaconWire toWire() {
+    return ActiveBeaconWire(
+      id: id,
+      uuid: uuid,
+      major: major,
+      minor: minor,
+      triggers: triggers.toList(),
+      androidSettings: androidSettings?.toWire(),
+    );
+  }
+}
+
+extension ActiveBeaconWireMapper on ActiveBeaconWire {
+  ActiveBeacon fromWire() {
+    return ActiveBeacon(
+      id: id,
+      uuid: uuid,
+      major: major,
+      minor: minor,
+      triggers: triggers.toSet(),
+      androidSettings: androidSettings?.fromWire(),
+    );
+  }
+}
+
+extension BeaconCallbackParamsWireMapper on BeaconCallbackParamsWire {
+  BeaconCallbackParams fromWire() {
+    return BeaconCallbackParams(
+      beacons: beacons.map((e) => e.fromWire()).toList(),
+      event: event,
+    );
   }
 }
