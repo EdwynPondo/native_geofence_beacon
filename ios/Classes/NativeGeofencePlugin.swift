@@ -8,12 +8,19 @@ public class NativeGeofencePlugin: NSObject, FlutterPlugin {
     private static var registerPlugins: FlutterPluginRegistrantCallback? = nil
     private static var instance: NativeGeofencePlugin? = nil
     
-    private var nativeGeofenceApi: NativeGeofenceApiImpl? = nil
+    private var locationManagerDelegate: LocationManagerDelegate? = nil
+    private var nativeApi: NativeGeofenceApiImpl? = nil
     
     init(registrar: FlutterPluginRegistrar, registerPlugins: FlutterPluginRegistrantCallback) {
-        nativeGeofenceApi = NativeGeofenceApiImpl(registerPlugins: registerPlugins)
-        NativeGeofenceApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nativeGeofenceApi)
+        // Create single API instance that implements both NativeGeofenceApi and NativeBeaconApi
+        nativeApi = NativeGeofenceApiImpl(registerPlugins: registerPlugins)
+        
+        // Setup both geofence and beacon APIs with the same instance
+        NativeGeofenceApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nativeApi)
         NativeGeofencePlugin.log.debug("NativeGeofenceApi initialized.")
+        
+        NativeBeaconApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nativeApi)
+        NativeGeofencePlugin.log.debug("NativeBeaconApi initialized.")
     }
     
     /// Called from the Flutter plugins AppDelegate.swift.
@@ -41,7 +48,7 @@ public class NativeGeofencePlugin: NSObject, FlutterPlugin {
     }
     
     public func detachFromEngine(for registrar: any FlutterPluginRegistrar) {
-        nativeGeofenceApi = nil
+        nativeApi = nil
         NativeGeofencePlugin.instance = nil
         NativeGeofencePlugin.log.debug("NativeGeofencePlugin detached.")
     }

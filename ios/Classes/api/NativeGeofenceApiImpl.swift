@@ -3,7 +3,7 @@ import Flutter
 import OSLog
 import UIKit
 
-public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi {
+public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi, NativeBeaconApi {
     private let log = Logger(subsystem: Constants.PACKAGE_NAME, category: "NativeGeofenceApiImpl")
     
     private let locationManagerDelegate: LocationManagerDelegate
@@ -11,6 +11,8 @@ public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi {
     init(registerPlugins: FlutterPluginRegistrantCallback) {
         self.locationManagerDelegate = LocationManagerDelegate(flutterPluginRegistrantCallback: registerPlugins)
     }
+    
+    // MARK: - NativeGeofenceApi
     
     func initialize(callbackDispatcherHandle: Int64) throws {
         NativeGeofencePersistence.setCallbackDispatcherHandle(callbackDispatcherHandle)
@@ -44,7 +46,9 @@ public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi {
     func getGeofenceIds() throws -> [String] {
         var geofenceIds: [String] = []
         for region in locationManagerDelegate.locationManager.monitoredRegions {
-            geofenceIds.append(region.identifier)
+            if region is CLCircularRegion {
+                geofenceIds.append(region.identifier)
+            }
         }
         log.debug("getGeofenceIds() found \(geofenceIds.count) geofence(s).")
         return geofenceIds
@@ -55,8 +59,6 @@ public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi {
         for region in locationManagerDelegate.locationManager.monitoredRegions {
             if let activeGeofence = ActiveGeofenceWires.fromRegion(region) {
                 geofences.append(activeGeofence)
-            } else {
-                log.error("Unknown region type: \(region)")
             }
         }
         log.debug("getGeofences() found \(geofences.count) geofence(s).")
@@ -66,7 +68,7 @@ public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi {
     func removeGeofenceById(id: String, completion: @escaping (Result<Void, any Error>) -> Void) {
         var removedCount = 0
         for region in locationManagerDelegate.locationManager.monitoredRegions {
-            if region.identifier == id {
+            if region.identifier == id && region is CLCircularRegion {
                 locationManagerDelegate.locationManager.stopMonitoring(for: region)
                 NativeGeofencePersistence.removeRegionCallbackHandle(id: region.identifier)
                 removedCount += 1
@@ -79,11 +81,111 @@ public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi {
     func removeAllGeofences(completion: @escaping (Result<Void, any Error>) -> Void) {
         var removedCount = 0
         for region in locationManagerDelegate.locationManager.monitoredRegions {
-            locationManagerDelegate.locationManager.stopMonitoring(for: region)
-            NativeGeofencePersistence.removeRegionCallbackHandle(id: region.identifier)
-            removedCount += 1
+            if region is CLCircularRegion {
+                locationManagerDelegate.locationManager.stopMonitoring(for: region)
+                NativeGeofencePersistence.removeRegionCallbackHandle(id: region.identifier)
+                removedCount += 1
+            }
         }
         log.debug("Removed \(removedCount) geofence(s).")
+        completion(.success(()))
+    }
+    
+    // MARK: - NativeBeaconApi
+    
+    func createBeacon(beacon: BeaconWire, completion: @escaping (Result<Void, any Error>) -> Void) {
+        guard let beaconUUID = UUID(uuidString: beacon.uuid) else {
+            log.error("Invalid UUID format: \(beacon.uuid)")
+            completion(.failure(NSError(domain: "NativeBeaconApi", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format"])))
+            return
+        }
+        
+        let beaconRegion: CLBeaconRegion
+        
+        if let major = beacon.major, let minor = beacon.minor {
+            // Monitor specific beacon with UUID, major, and minor
+            beaconRegion = CLBeaconRegion(
+                uuid: beaconUUID,
+                major: CLBeaconMajorValue(major),
+                minor: CLBeaconMinorValue(minor),
+                identifier: beacon.id
+            )
+        } else if let major = beacon.major {
+            // Monitor beacons with UUID and major
+            beaconRegion = CLBeaconRegion(
+                uuid: beaconUUID,
+                major: CLBeaconMajorValue(major),
+                identifier: beacon.id
+            )
+        } else {
+            // Monitor all beacons with UUID
+            beaconRegion = CLBeaconRegion(
+                uuid: beaconUUID,
+                identifier: beacon.id
+            )
+        }
+        
+        beaconRegion.notifyOnEntry = beacon.triggers.contains(.enter)
+        beaconRegion.notifyOnExit = beacon.triggers.contains(.exit)
+        beaconRegion.notifyEntryStateOnDisplay = beacon.iosSettings.notifyEntryStateOnDisplay
+        
+        NativeBeaconPersistence.setRegionCallbackHandle(id: beacon.id, handle: beacon.callbackHandle)
+        
+        locationManagerDelegate.locationManager.startMonitoring(for: beaconRegion)
+        if beacon.iosSettings.initialTrigger {
+            locationManagerDelegate.locationManager.requestState(for: beaconRegion)
+        }
+        
+        log.debug("Created beacon ID=\(beacon.id) with UUID=\(beacon.uuid).")
+        
+        completion(.success(()))
+    }
+    
+    func getBeaconIds() throws -> [String] {
+        var beaconIds: [String] = []
+        for region in locationManagerDelegate.locationManager.monitoredRegions {
+            if region is CLBeaconRegion {
+                beaconIds.append(region.identifier)
+            }
+        }
+        log.debug("getBeaconIds() found \(beaconIds.count) beacon(s).")
+        return beaconIds
+    }
+    
+    func getBeacons() throws -> [ActiveBeaconWire] {
+        var beacons: [ActiveBeaconWire] = []
+        for region in locationManagerDelegate.locationManager.monitoredRegions {
+            if let activeBeacon = ActiveBeaconWires.fromRegion(region) {
+                beacons.append(activeBeacon)
+            }
+        }
+        log.debug("getBeacons() found \(beacons.count) beacon(s).")
+        return beacons
+    }
+    
+    func removeBeaconById(id: String, completion: @escaping (Result<Void, any Error>) -> Void) {
+        var removedCount = 0
+        for region in locationManagerDelegate.locationManager.monitoredRegions {
+            if region.identifier == id && region is CLBeaconRegion {
+                locationManagerDelegate.locationManager.stopMonitoring(for: region)
+                NativeBeaconPersistence.removeRegionCallbackHandle(id: region.identifier)
+                removedCount += 1
+            }
+        }
+        log.debug("Removed \(removedCount) beacon(s) with ID=\(id).")
+        completion(.success(()))
+    }
+    
+    func removeAllBeacons(completion: @escaping (Result<Void, any Error>) -> Void) {
+        var removedCount = 0
+        for region in locationManagerDelegate.locationManager.monitoredRegions {
+            if region is CLBeaconRegion {
+                locationManagerDelegate.locationManager.stopMonitoring(for: region)
+                NativeBeaconPersistence.removeRegionCallbackHandle(id: region.identifier)
+                removedCount += 1
+            }
+        }
+        log.debug("Removed \(removedCount) beacon(s).")
         completion(.success(()))
     }
 }
