@@ -3,6 +3,7 @@ package com.chunkytofustudios.native_geofence.receivers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -44,12 +45,14 @@ class NativeGeofenceBroadcastReceiver : BroadcastReceiver() {
         }
 
         // 2. Check if it's a Beacon event
-        if (intent.hasExtra(BeaconManager.PUSH_GATEWAY_NOTIFIER_STATE)) {
+        // Using string literals for keys to avoid issues with missing Constants
+        // "state" and "org.altbeacon.beacon.Region" are the standard extras for AltBeacon Monitoring
+        if (intent.hasExtra("state") && intent.hasExtra("org.altbeacon.beacon.Region")) {
             handleBeaconEvent(context, intent)
             return
         }
 
-        Log.w(TAG, "Broadcast received but no geofence or beacon data found.")
+        Log.w(TAG, "Broadcast received but no geofence or beacon data found. Extras: ${intent.extras?.keySet()}")
     }
 
     private fun handleGeofenceEvent(context: Context, intent: Intent, geofencingEvent: GeofencingEvent) {
@@ -69,7 +72,7 @@ class NativeGeofenceBroadcastReceiver : BroadcastReceiver() {
             .setInputData(Data.Builder().putString(Constants.WORKER_PAYLOAD_KEY, jsonData).build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
-
+ 
         WorkManager.getInstance(context).beginUniqueWork(
             workGroup,
             ExistingWorkPolicy.APPEND,
@@ -98,15 +101,26 @@ class NativeGeofenceBroadcastReceiver : BroadcastReceiver() {
     }
 
     private fun getBeaconCallbackParams(context: Context, intent: Intent): BeaconCallbackParamsWire? {
-        val state = intent.getIntExtra(BeaconManager.PUSH_GATEWAY_NOTIFIER_STATE, -1)
-        val region = intent.getSerializableExtra(BeaconManager.PUSH_GATEWAY_NOTIFIER_REGION) as? Region
+        val state = intent.getIntExtra("state", -1)
+        val region = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getSerializableExtra("org.altbeacon.beacon.Region", Region::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getSerializableExtra("org.altbeacon.beacon.Region") as? Region
+        }
         
-        if (region == null || state == -1) return null
+        if (region == null || state == -1) {
+            Log.e(TAG, "Beacon event region or state missing. Region: $region, State: $state")
+            return null
+        }
 
         val event = when (state) {
             MonitorNotifier.INSIDE -> BeaconEvent.ENTER
             MonitorNotifier.OUTSIDE -> BeaconEvent.EXIT
-            else -> return null
+            else -> {
+                Log.w(TAG, "Unknown beacon state: $state")
+                return null
+            }
         }
 
         val beaconWire = NativeBeaconPersistence.getAllBeacons(context).find { it.id == region.uniqueId } ?: return null

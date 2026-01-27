@@ -28,9 +28,10 @@ import com.chunkytofustudios.native_geofence.util.NativeGeofencePersistence
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 import org.altbeacon.beacon.BeaconManager
+import org.altbeacon.beacon.MonitorNotifier
 import org.altbeacon.beacon.Region
 
-class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, NativeBeaconApi {
+class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, NativeBeaconApi, MonitorNotifier {
     companion object {
         @JvmStatic
         private val TAG = "NativeGeofenceApiImpl"
@@ -41,18 +42,8 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
         // Support iBeacon
         beaconParsers.add(org.altbeacon.beacon.BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"))
         
-        // Configure AltBeacon to send events to our receiver for background monitoring
-        val intent = Intent(context, com.chunkytofustudios.native_geofence.receivers.NativeGeofenceBroadcastReceiver::class.java)
-        setIntentScanningStrategy(PendingIntent.getBroadcast(
-            context,
-            1, // Unique request code
-            intent,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
-        ))
+        // Register this instance as a monitor notifier to receive enter/exit events
+        addMonitorNotifier(this@NativeGeofenceApiImpl)
     }
 
     override fun initialize(callbackDispatcherHandle: Long) {
@@ -341,5 +332,29 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
             Log.e(TAG, "Failed to start monitoring Beacon ID=${beacon.id}: $e")
             callback?.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.PLUGIN_INTERNAL.raw.toString(), e.toString())))
         }
+    }
+
+    // --- MonitorNotifier Implementation ---
+
+    override fun didEnterRegion(region: Region) {
+        Log.d(TAG, "didEnterRegion: ${region.uniqueId}")
+        triggerBeaconBroadcast(region, MonitorNotifier.INSIDE)
+    }
+
+    override fun didExitRegion(region: Region) {
+        Log.d(TAG, "didExitRegion: ${region.uniqueId}")
+        triggerBeaconBroadcast(region, MonitorNotifier.OUTSIDE)
+    }
+
+    override fun didDetermineStateForRegion(state: Int, region: Region) {
+        Log.d(TAG, "didDetermineStateForRegion: $state for ${region.uniqueId}")
+    }
+
+    private fun triggerBeaconBroadcast(region: Region, state: Int) {
+        val intent = Intent(context, NativeGeofenceBroadcastReceiver::class.java).apply {
+            putExtra("state", state)
+            putExtra("org.altbeacon.beacon.Region", region)
+        }
+        context.sendBroadcast(intent)
     }
 }
