@@ -3,6 +3,7 @@ package com.chunkytofustudios.native_geofence
 import android.content.Context
 import android.util.Log
 import com.chunkytofustudios.native_geofence.api.NativeGeofenceApiImpl
+import com.chunkytofustudios.native_geofence.generated.NativeBeaconApi
 import com.chunkytofustudios.native_geofence.generated.NativeGeofenceApi
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 
@@ -15,11 +16,16 @@ class NativeGeofencePlugin : FlutterPlugin {
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        val apiImpl = NativeGeofenceApiImpl(binding.applicationContext)
         NativeGeofenceApi.setUp(
             binding.binaryMessenger,
-            NativeGeofenceApiImpl(binding.applicationContext)
+            apiImpl
         )
-        Log.d(TAG, "NativeGeofenceApi setup complete.")
+        NativeBeaconApi.setUp(
+            binding.binaryMessenger,
+            apiImpl
+        )
+        Log.d(TAG, "NativeGeofenceApi and NativeBeaconApi setup complete.")
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {

@@ -11,14 +11,22 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import com.chunkytofustudios.native_geofence.Constants
 import com.chunkytofustudios.native_geofence.NativeGeofenceBackgroundWorker
+import com.chunkytofustudios.native_geofence.generated.ActiveBeaconWire
+import com.chunkytofustudios.native_geofence.generated.BeaconCallbackParamsWire
+import com.chunkytofustudios.native_geofence.generated.BeaconEvent
 import com.chunkytofustudios.native_geofence.generated.GeofenceCallbackParamsWire
+import com.chunkytofustudios.native_geofence.model.BeaconCallbackParamsStorage
 import com.chunkytofustudios.native_geofence.model.GeofenceCallbackParamsStorage
 import com.chunkytofustudios.native_geofence.util.ActiveGeofenceWires
 import com.chunkytofustudios.native_geofence.util.GeofenceEvents
 import com.chunkytofustudios.native_geofence.util.LocationWires
+import com.chunkytofustudios.native_geofence.util.NativeBeaconPersistence
 import com.google.android.gms.location.GeofencingEvent
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.altbeacon.beacon.BeaconManager
+import org.altbeacon.beacon.MonitorNotifier
+import org.altbeacon.beacon.Region
 
 class NativeGeofenceBroadcastReceiver : BroadcastReceiver() {
     companion object {
@@ -26,74 +34,91 @@ class NativeGeofenceBroadcastReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        Log.d(TAG, "Geofence broadcast received.")
+        Log.d(TAG, "Broadcast received.")
 
-        val geofenceCallbackParams = getGeofenceCallbackParams(intent) ?: return
+        // 1. Check if it's a Geofence event
+        val geofencingEvent = GeofencingEvent.fromIntent(intent)
+        if (geofencingEvent != null && !geofencingEvent.hasError()) {
+            handleGeofenceEvent(context, intent, geofencingEvent)
+            return
+        }
 
-        val jsonData =
-            Json.encodeToString(GeofenceCallbackParamsStorage.fromWire(geofenceCallbackParams))
+        // 2. Check if it's a Beacon event
+        if (intent.hasExtra(BeaconManager.PUSH_GATEWAY_NOTIFIER_STATE)) {
+            handleBeaconEvent(context, intent)
+            return
+        }
+
+        Log.w(TAG, "Broadcast received but no geofence or beacon data found.")
+    }
+
+    private fun handleGeofenceEvent(context: Context, intent: Intent, geofencingEvent: GeofencingEvent) {
+        val params = getGeofenceCallbackParams(intent, geofencingEvent) ?: return
+        val jsonData = Json.encodeToString(GeofenceCallbackParamsStorage.fromWire(params))
+        enqueueWork(context, jsonData, Constants.GEOFENCE_CALLBACK_WORK_GROUP)
+    }
+
+    private fun handleBeaconEvent(context: Context, intent: Intent) {
+        val params = getBeaconCallbackParams(context, intent) ?: return
+        val jsonData = Json.encodeToString(BeaconCallbackParamsStorage.fromWire(params))
+        enqueueWork(context, jsonData, Constants.BEACON_CALLBACK_WORK_GROUP)
+    }
+
+    private fun enqueueWork(context: Context, jsonData: String, workGroup: String) {
         val workRequest = OneTimeWorkRequestBuilder<NativeGeofenceBackgroundWorker>()
             .setInputData(Data.Builder().putString(Constants.WORKER_PAYLOAD_KEY, jsonData).build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
 
-        val workManager = WorkManager.getInstance(context)
-        val work = workManager.beginUniqueWork(
-            Constants.GEOFENCE_CALLBACK_WORK_GROUP,
-            // Process geofence callbacks sequentially.
+        WorkManager.getInstance(context).beginUniqueWork(
+            workGroup,
             ExistingWorkPolicy.APPEND,
             workRequest
-        )
-        work.enqueue()
+        ).enqueue()
     }
 
-    private fun getGeofenceCallbackParams(intent: Intent): GeofenceCallbackParamsWire? {
+    private fun getGeofenceCallbackParams(intent: Intent, geofencingEvent: GeofencingEvent): GeofenceCallbackParamsWire? {
         val callbackHandle = intent.getLongExtra(Constants.CALLBACK_HANDLE_KEY, 0)
         if (callbackHandle == 0L) {
             Log.e(TAG, "GeofencingEvent callback handle is missing.")
             return null
         }
 
-        val geofencingEvent = GeofencingEvent.fromIntent(intent)
-        if (geofencingEvent == null) {
-            Log.e(TAG, "GeofencingEvent is null.")
-            return null
-        }
-        if (geofencingEvent.hasError()) {
-            Log.e(TAG, "GeofencingEvent has error Code=${geofencingEvent.errorCode}.")
-            return null
-        }
-
-        // Get the transition type.
-        val geofenceEvent = GeofenceEvents.fromInt(geofencingEvent.geofenceTransition)
-        if (geofenceEvent == null) {
-            Log.e(
-                TAG,
-                "GeofencingEvent has invalid transition ID=${geofencingEvent.geofenceTransition}."
-            )
-            return null
-        }
-
-        // Get the geofences that were triggered. A single event can trigger
-        // multiple geofences.
+        val geofenceEvent = GeofenceEvents.fromInt(geofencingEvent.geofenceTransition) ?: return null
         val triggeringGeofences = geofencingEvent.triggeringGeofences?.map {
             ActiveGeofenceWires.fromGeofence(it)
-        }
-        if (triggeringGeofences.isNullOrEmpty()) {
-            Log.e(TAG, "No triggering geofences found.")
-            return null
-        }
-
-        val location = geofencingEvent.triggeringLocation
-        if (location == null) {
-            Log.w(TAG, "No triggering location found.")
-        }
+        } ?: return null
 
         return GeofenceCallbackParamsWire(
             triggeringGeofences,
             geofenceEvent,
-            location?.let { LocationWires.fromLocation(it) },
+            geofencingEvent.triggeringLocation?.let { LocationWires.fromLocation(it) },
             callbackHandle
+        )
+    }
+
+    private fun getBeaconCallbackParams(context: Context, intent: Intent): BeaconCallbackParamsWire? {
+        val state = intent.getIntExtra(BeaconManager.PUSH_GATEWAY_NOTIFIER_STATE, -1)
+        val region = intent.getSerializableExtra(BeaconManager.PUSH_GATEWAY_NOTIFIER_REGION) as? Region
+        
+        if (region == null || state == -1) return null
+
+        val event = when (state) {
+            MonitorNotifier.INSIDE -> BeaconEvent.ENTER
+            MonitorNotifier.OUTSIDE -> BeaconEvent.EXIT
+            else -> return null
+        }
+
+        val beaconWire = NativeBeaconPersistence.getAllBeacons(context).find { it.id == region.uniqueId } ?: return null
+        if (!beaconWire.triggers.contains(event)) return null
+
+        return BeaconCallbackParamsWire(
+            listOf(ActiveBeaconWire(
+                beaconWire.id, beaconWire.uuid, beaconWire.major, beaconWire.minor,
+                beaconWire.triggers, beaconWire.androidSettings
+            )),
+            event,
+            beaconWire.callbackHandle
         )
     }
 }

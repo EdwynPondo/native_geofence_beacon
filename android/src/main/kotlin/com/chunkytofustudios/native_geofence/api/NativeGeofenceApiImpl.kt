@@ -10,34 +10,61 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.chunkytofustudios.native_geofence.Constants
+import com.chunkytofustudios.native_geofence.generated.ActiveBeaconWire
 import com.chunkytofustudios.native_geofence.generated.ActiveGeofenceWire
+import com.chunkytofustudios.native_geofence.generated.BeaconWire
 import com.chunkytofustudios.native_geofence.generated.FlutterError
 import com.chunkytofustudios.native_geofence.generated.GeofenceWire
+import com.chunkytofustudios.native_geofence.generated.NativeBeaconApi
 import com.chunkytofustudios.native_geofence.generated.NativeGeofenceApi
 import com.chunkytofustudios.native_geofence.generated.NativeGeofenceErrorCode
 import com.chunkytofustudios.native_geofence.util.GeofenceEvents
 import com.chunkytofustudios.native_geofence.receivers.NativeGeofenceBroadcastReceiver
+import com.chunkytofustudios.native_geofence.util.ActiveBeaconWires
 import com.chunkytofustudios.native_geofence.util.ActiveGeofenceWires
 import com.chunkytofustudios.native_geofence.util.GeofenceWires
+import com.chunkytofustudios.native_geofence.util.NativeBeaconPersistence
 import com.chunkytofustudios.native_geofence.util.NativeGeofencePersistence
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import org.altbeacon.beacon.BeaconManager
+import org.altbeacon.beacon.Region
 
-class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi {
+class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, NativeBeaconApi {
     companion object {
         @JvmStatic
         private val TAG = "NativeGeofenceApiImpl"
     }
 
     private val geofencingClient = LocationServices.getGeofencingClient(context)
+    private val beaconManager = BeaconManager.getInstanceForApplication(context).apply {
+        // Support iBeacon
+        beaconParsers.add(org.altbeacon.beacon.BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"))
+        
+        // Configure AltBeacon to send events to our receiver for background monitoring
+        val intent = Intent(context, com.chunkytofustudios.native_geofence.receivers.NativeGeofenceBroadcastReceiver::class.java)
+        setIntentScanningStrategy(PendingIntent.getBroadcast(
+            context,
+            1, // Unique request code
+            intent,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+        ))
+    }
 
     override fun initialize(callbackDispatcherHandle: Long) {
         context.getSharedPreferences(Constants.SHARED_PREFERENCES_KEY, Context.MODE_PRIVATE)
             .edit()
             .putLong(Constants.CALLBACK_DISPATCHER_HANDLE_KEY, callbackDispatcherHandle)
+            .putLong(Constants.BEACON_CALLBACK_DISPATCHER_HANDLE_KEY, callbackDispatcherHandle)
             .apply()
-        Log.d(TAG, "Initialized NativeGeofenceApi.")
+        Log.d(TAG, "Initialized consolidated NativeGeofenceApi and NativeBeaconApi.")
     }
+
+    // --- NativeGeofenceApi Implementation ---
 
     override fun createGeofence(
         geofence: GeofenceWire,
@@ -51,7 +78,13 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi {
         for (geofence in geofences) {
             createGeofenceHelper(geofence, false, null)
         }
-        Log.d(TAG, "${geofences.size} geofences re-created.")
+        
+        val beacons = NativeBeaconPersistence.getAllBeacons(context)
+        for (beacon in beacons) {
+            createBeaconHelper(beacon, false, null)
+        }
+        
+        Log.d(TAG, "${geofences.size} geofences and ${beacons.size} beacons re-created.")
     }
 
     override fun getGeofenceIds(): List<String> {
@@ -107,6 +140,66 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi {
             }
         }
     }
+
+    // --- NativeBeaconApi Implementation ---
+
+    override fun createBeacon(
+        beacon: BeaconWire,
+        callback: (Result<Unit>) -> Unit
+    ) {
+        createBeaconHelper(beacon, true, callback)
+    }
+
+    override fun getBeaconIds(): List<String> {
+        return NativeBeaconPersistence.getAllBeaconIds(context)
+    }
+
+    override fun getBeacons(): List<ActiveBeaconWire> {
+        val beacons = NativeBeaconPersistence.getAllBeacons(context)
+        return beacons.map { ActiveBeaconWires.fromBeaconWire(it) }.toList()
+    }
+
+    override fun removeBeaconById(id: String, callback: (Result<Unit>) -> Unit) {
+        try {
+            // Find the region to stop monitoring. AltBeacon uses Region objects.
+            val allBeacons = NativeBeaconPersistence.getAllBeacons(context)
+            val beaconToRemove = allBeacons.find { it.id == id }
+            
+            if (beaconToRemove == null) {
+                callback.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.BEACON_NOT_FOUND.raw.toString(), "Beacon not found")))
+                return
+            }
+
+            // AltBeacon stopMonitoring
+            // NOTE: We'll need a way to rebuild the Region object or store it.
+            // For now, we'll just remove it from persistence and stopMonitoring if we can.
+            // Better implementation would keep a mapping of ID to Region.
+            val region = Region(id, null, null, null)
+            beaconManager.stopMonitoring(region)
+            
+            NativeBeaconPersistence.removeBeacon(context, id)
+            Log.d(TAG, "Removed Beacon ID=$id.")
+            callback.invoke(Result.success(Unit))
+        } catch (e: Exception) {
+            callback.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.PLUGIN_INTERNAL.raw.toString(), e.toString())))
+        }
+    }
+
+    override fun removeAllBeacons(callback: (Result<Unit>) -> Unit) {
+        try {
+            val ids = NativeBeaconPersistence.getAllBeaconIds(context)
+            for (id in ids) {
+                beaconManager.stopMonitoring(Region(id, null, null, null))
+            }
+            NativeBeaconPersistence.removeAllBeacons(context)
+            Log.d(TAG, "Removed all beacons.")
+            callback.invoke(Result.success(Unit))
+        } catch (e: Exception) {
+            callback.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.PLUGIN_INTERNAL.raw.toString(), e.toString())))
+        }
+    }
+
+    // --- Helper Methods ---
 
     private fun getGeofencePendingIndent(
         context: Context,
@@ -202,6 +295,51 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi {
                     )
                 )
             }
+        }
+    }
+
+    private fun createBeaconHelper(
+        beacon: BeaconWire,
+        cache: Boolean,
+        callback: ((Result<Unit>) -> Unit)?
+    ) {
+        try {
+            // Check Bluetooth permissions
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                // For simplified implementation, we'll just check Manifest.permission.BLUETOOTH on older versions
+                // and BLUETOOTH_SCAN on 31+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                         callback?.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.MISSING_BLUETOOTH_PERMISSION.raw.toString(), "Missing BLUETOOTH_SCAN permission")))
+                         return
+                     }
+                }
+            }
+
+            // AltBeacon monitoring
+            // We need a Region object
+            // uuid major minor are nullable in BeaconWire? 
+            // In iBeacon: Region(id, uuid, major, minor)
+            // If major is null, it's a wildcard.
+            val region = Region(
+                beacon.id,
+                org.altbeacon.beacon.Identifier.parse(beacon.uuid),
+                beacon.major?.let { org.altbeacon.beacon.Identifier.fromInt(it.toInt()) },
+                beacon.minor?.let { org.altbeacon.beacon.Identifier.fromInt(it.toInt()) }
+            )
+
+            beaconManager.startMonitoring(region)
+            
+            if (cache) {
+                NativeBeaconPersistence.saveBeacon(context, beacon)
+            }
+            
+            Log.d(TAG, "Successfully started monitoring Beacon ID=${beacon.id}.")
+            callback?.invoke(Result.success(Unit))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start monitoring Beacon ID=${beacon.id}: $e")
+            callback?.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.PLUGIN_INTERNAL.raw.toString(), e.toString())))
         }
     }
 }

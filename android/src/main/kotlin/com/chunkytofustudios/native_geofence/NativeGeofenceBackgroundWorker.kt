@@ -11,8 +11,11 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import com.chunkytofustudios.native_geofence.api.NativeGeofenceBackgroundApiImpl
 import com.chunkytofustudios.native_geofence.generated.GeofenceCallbackParamsWire
+import com.chunkytofustudios.native_geofence.generated.NativeBeaconBackgroundApi
+import com.chunkytofustudios.native_geofence.generated.NativeBeaconTriggerApi
 import com.chunkytofustudios.native_geofence.generated.NativeGeofenceBackgroundApi
 import com.chunkytofustudios.native_geofence.generated.NativeGeofenceTriggerApi
+import com.chunkytofustudios.native_geofence.model.BeaconCallbackParamsStorage
 import com.chunkytofustudios.native_geofence.model.GeofenceCallbackParamsStorage
 import com.chunkytofustudios.native_geofence.util.Notifications
 import com.google.common.util.concurrent.Futures
@@ -72,11 +75,15 @@ class NativeGeofenceBackgroundWorker(
             null,
             Handler(Looper.getMainLooper()),
         ) {
-            val callbackHandle = context.getSharedPreferences(
+            val sharedPrefs = context.getSharedPreferences(
                 Constants.SHARED_PREFERENCES_KEY,
                 Context.MODE_PRIVATE
             )
-                .getLong(Constants.CALLBACK_DISPATCHER_HANDLE_KEY, 0)
+            val geofenceHandle = sharedPrefs.getLong(Constants.CALLBACK_DISPATCHER_HANDLE_KEY, 0)
+            val beaconHandle = sharedPrefs.getLong(Constants.BEACON_CALLBACK_DISPATCHER_HANDLE_KEY, 0)
+            
+            val callbackHandle = if (geofenceHandle != 0L) geofenceHandle else beaconHandle
+            
             if (callbackHandle == 0L) {
                 Log.e(TAG, "No callback dispatcher registered.")
                 stopEngine(Result.failure())
@@ -95,7 +102,12 @@ class NativeGeofenceBackgroundWorker(
                 backgroundApiImpl = NativeGeofenceBackgroundApiImpl(context, this)
                 NativeGeofenceBackgroundApi.setUp(
                     engine.dartExecutor.binaryMessenger,
-                    NativeGeofenceBackgroundApiImpl(context, this)
+                    backgroundApiImpl
+                )
+                
+                NativeBeaconBackgroundApi.setUp(
+                    engine.dartExecutor.binaryMessenger,
+                    backgroundApiImpl
                 )
 
                 engine.dartExecutor.executeDartCallback(
@@ -123,18 +135,38 @@ class NativeGeofenceBackgroundWorker(
             return
         }
 
-        val nativeGeofenceTriggerApi =
-            NativeGeofenceTriggerApi(lEngine.dartExecutor.binaryMessenger)
-        Log.d(TAG, "NativeGeofenceTriggerApi setup complete.")
-
-        val params = getGeofenceCallbackParams()
-        if (params == null) {
+        val jsonData = workerParams.inputData.getString(Constants.WORKER_PAYLOAD_KEY)
+        if (jsonData == null) {
+            Log.e(TAG, "Worker payload was missing.")
             stopEngine(Result.failure())
             return
         }
 
-        nativeGeofenceTriggerApi.geofenceTriggered(params) {
-            stopEngine(Result.success())
+        // Try to decode as Geofence
+        try {
+            val geofenceParams = Json.decodeFromString<GeofenceCallbackParamsStorage>(jsonData).toWire()
+            val nativeGeofenceTriggerApi = NativeGeofenceTriggerApi(lEngine.dartExecutor.binaryMessenger)
+            Log.d(TAG, "Triggering geofence callback.")
+            nativeGeofenceTriggerApi.geofenceTriggered(geofenceParams) {
+                stopEngine(Result.success())
+            }
+            return
+        } catch (e: Exception) {
+            // Not a geofence payload, try beacon
+            Log.d(TAG, "Not a geofence payload, trying beacon.")
+        }
+
+        try {
+            val beaconParams = Json.decodeFromString<BeaconCallbackParamsStorage>(jsonData).toWire()
+            val nativeBeaconTriggerApi = NativeBeaconTriggerApi(lEngine.dartExecutor.binaryMessenger)
+            Log.d(TAG, "Triggering beacon callback.")
+            nativeBeaconTriggerApi.beaconTriggered(beaconParams) {
+                stopEngine(Result.success())
+            }
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse worker payload as either geofence or beacon. Data=$jsonData Error=$e")
+            stopEngine(Result.failure())
         }
     }
 
