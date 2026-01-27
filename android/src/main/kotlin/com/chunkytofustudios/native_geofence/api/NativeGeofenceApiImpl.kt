@@ -30,6 +30,7 @@ import com.google.android.gms.location.LocationServices
 import org.altbeacon.beacon.BeaconManager
 import org.altbeacon.beacon.MonitorNotifier
 import org.altbeacon.beacon.Region
+import java.io.Serializable
 
 class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, NativeBeaconApi, MonitorNotifier {
     companion object {
@@ -353,7 +354,7 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
     private fun triggerBeaconBroadcast(region: Region, state: Int) {
         val intent = Intent(context, NativeGeofenceBroadcastReceiver::class.java).apply {
             putExtra("state", state)
-            putExtra("org.altbeacon.beacon.Region", region)
+            putExtra("org.altbeacon.beacon.Region", region as Serializable)
         }
         context.sendBroadcast(intent)
     }
