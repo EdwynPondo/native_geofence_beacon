@@ -123,13 +123,15 @@ class NativeGeofenceBroadcastReceiver : BroadcastReceiver() {
             }
         }
 
+        val rssi = intent.getIntExtra("rssi", 0).takeIf { it != 0 }?.toLong()
+
         val beaconWire = NativeBeaconPersistence.getAllBeacons(context).find { it.id == region.uniqueId } ?: return null
         if (!beaconWire.triggers.contains(event)) return null
 
         return BeaconCallbackParamsWire(
             listOf(ActiveBeaconWire(
                 beaconWire.id, beaconWire.uuid, beaconWire.major, beaconWire.minor,
-                null,
+                rssi,
                 beaconWire.triggers, beaconWire.androidSettings
             )),
             event,

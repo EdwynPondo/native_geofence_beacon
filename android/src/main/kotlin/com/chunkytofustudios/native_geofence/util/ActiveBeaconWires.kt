@@ -11,6 +11,7 @@ class ActiveBeaconWires {
                 e.uuid,
                 e.major,
                 e.minor,
+                null,
                 e.triggers,
                 e.androidSettings
             )
