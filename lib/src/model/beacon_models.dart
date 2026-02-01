@@ -135,6 +135,9 @@ class ActiveBeacon {
   /// The minor value of the beacon (optional).
   final int? minor;
 
+  /// The RSSI value of the beacon (optional).
+  final int? rssi;
+
   /// The types of beacon events to listen for.
   final Set<BeaconEvent> triggers;
 
@@ -149,6 +152,7 @@ class ActiveBeacon {
     required this.uuid,
     this.major,
     this.minor,
+    this.rssi,
     required this.triggers,
     required this.androidSettings,
   });
@@ -160,6 +164,7 @@ class ActiveBeacon {
         'uuid: $uuid, '
         'major: $major, '
         'minor: $minor, '
+        'rssi: $rssi, '
         'triggers: [${triggers.map((e) => e.name).join(',')}], '
         'androidSettings: $androidSettings)';
   }

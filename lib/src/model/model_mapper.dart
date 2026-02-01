@@ -242,6 +242,7 @@ extension ActiveBeaconMapper on ActiveBeacon {
       uuid: uuid,
       major: major,
       minor: minor,
+      rssi: rssi,
       triggers: triggers.toList(),
       androidSettings: androidSettings?.toWire(),
     );
@@ -255,6 +256,7 @@ extension ActiveBeaconWireMapper on ActiveBeaconWire {
       uuid: uuid,
       major: major,
       minor: minor,
+      rssi: rssi,
       triggers: triggers.toSet(),
       androidSettings: androidSettings?.fromWire(),
     );
