@@ -262,6 +262,7 @@ class ActiveBeaconWire {
   final String uuid;
   final int? major;
   final int? minor;
+  final int? rssi;
   final List<BeaconEvent> triggers;
   final AndroidBeaconSettingsWire? androidSettings;
 
@@ -270,6 +271,7 @@ class ActiveBeaconWire {
     required this.uuid,
     this.major,
     this.minor,
+    this.rssi,
     required this.triggers,
     required this.androidSettings,
   });

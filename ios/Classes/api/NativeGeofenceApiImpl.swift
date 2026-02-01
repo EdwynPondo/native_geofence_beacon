@@ -100,30 +100,27 @@ public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi, NativeBeaconApi
             return
         }
         
-        let beaconRegion: CLBeaconRegion
+        let constraint: CLBeaconIdentityConstraint
         
         if let major = beacon.major, let minor = beacon.minor {
             // Monitor specific beacon with UUID, major, and minor
-            beaconRegion = CLBeaconRegion(
+            constraint = CLBeaconIdentityConstraint(
                 uuid: beaconUUID,
                 major: CLBeaconMajorValue(major),
-                minor: CLBeaconMinorValue(minor),
-                identifier: beacon.id
+                minor: CLBeaconMinorValue(minor)
             )
         } else if let major = beacon.major {
             // Monitor beacons with UUID and major
-            beaconRegion = CLBeaconRegion(
+            constraint = CLBeaconIdentityConstraint(
                 uuid: beaconUUID,
-                major: CLBeaconMajorValue(major),
-                identifier: beacon.id
+                major: CLBeaconMajorValue(major)
             )
         } else {
             // Monitor all beacons with UUID
-            beaconRegion = CLBeaconRegion(
-                uuid: beaconUUID,
-                identifier: beacon.id
-            )
+            constraint = CLBeaconIdentityConstraint(uuid: beaconUUID)
         }
+        
+        let beaconRegion = CLBeaconRegion(beaconIdentityConstraint: constraint, identifier: beacon.id)
         
         beaconRegion.notifyOnEntry = beacon.triggers.contains(.enter)
         beaconRegion.notifyOnExit = beacon.triggers.contains(.exit)

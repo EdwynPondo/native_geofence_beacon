@@ -80,19 +80,60 @@ class LocationManagerDelegate: NSObject, CLLocationManagerDelegate {
     }
     
     private func handleBeaconRegionStateChange(state: CLRegionState, region: CLRegion) {
-        log.debug("didDetermineState: \\(String(describing: state)) for beacon ID: \\(region.identifier)")
+        log.debug("didDetermineState: \(String(describing: state)) for beacon ID: \(region.identifier)")
         
-        guard let event: BeaconEvent = switch state {
-        case .unknown: nil
-        case .inside: .enter
-        case .outside: .exit
-        } else {
-            log.error("Unknown CLRegionState: \\(String(describing: state))")
-            return
+        guard let beaconRegion = region as? CLBeaconRegion else { return }
+        
+        if state == .inside {
+            // Start ranging to get RSSI
+            if #available(iOS 13.0, *) {
+                locationManager.startRangingBeacons(satisfying: beaconRegion.beaconIdentityConstraint)
+            } else {
+                locationManager.startRangingBeacons(in: beaconRegion)
+            }
+        } else if state == .outside {
+            // Stop ranging and send exit event
+            if #available(iOS 13.0, *) {
+                locationManager.stopRangingBeacons(satisfying: beaconRegion.beaconIdentityConstraint)
+            } else {
+                locationManager.stopRangingBeacons(in: beaconRegion)
+            }
+            sendBeaconEvent(region: region, event: .exit, rssi: nil)
         }
+    }
+    
+    // MARK: - Ranging Delegate
+    
+    // iOS 13+
+    func locationManager(_ manager: CLLocationManager, didRange beacons: [CLBeacon], satisfying beaconConstraint: CLBeaconIdentityConstraint) {
+        handleRangedBeacons(beacons, constraint: beaconConstraint)
+    }
+    
+    // iOS < 13
+    func locationManager(_ manager: CLLocationManager, didRangeBeacons beacons: [CLBeacon], in region: CLBeaconRegion) {
+         if let beacon = beacons.first {
+             sendBeaconEvent(region: region, event: .enter, rssi: beacon.rssi)
+             manager.stopRangingBeacons(in: region)
+         }
+    }
+    
+    private func handleRangedBeacons(_ beacons: [CLBeacon], constraint: CLBeaconIdentityConstraint) {
+        guard let beacon = beacons.first else { return }
         
-        guard let activeBeacon = ActiveBeaconWires.fromRegion(region) else {
-            log.error("Unknown CLRegion type: \\(String(describing: type(of: region)))")
+        // Find the region that matches this constraint
+        for region in locationManager.monitoredRegions {
+            guard let beaconRegion = region as? CLBeaconRegion else { continue }
+            if beaconRegion.beaconIdentityConstraint == constraint {
+                sendBeaconEvent(region: beaconRegion, event: .enter, rssi: beacon.rssi)
+                locationManager.stopRangingBeacons(satisfying: constraint)
+                return
+            }
+        }
+    }
+
+    private func sendBeaconEvent(region: CLRegion, event: BeaconEvent, rssi: Int? = nil) {
+        guard let activeBeacon = ActiveBeaconWires.fromRegion(region, rssi: rssi) else {
+            log.error("Unknown CLRegion type: \(String(describing: type(of: region)))")
             return
         }
 
@@ -101,7 +142,7 @@ class LocationManagerDelegate: NSObject, CLLocationManagerDelegate {
         }
         
         guard let callbackHandle = NativeBeaconPersistence.getRegionCallbackHandle(id: activeBeacon.id) else {
-            log.error("Callback handle for beacon \\(activeBeacon.id) not found.")
+            log.error("Callback handle for beacon \(activeBeacon.id) not found.")
             return
         }
         
@@ -120,7 +161,7 @@ class LocationManagerDelegate: NSObject, CLLocationManagerDelegate {
         }
         
         nativeBackgroundApi!.beaconTriggered(params: params, cleanup: cleanup)
-        log.debug("Beacon trigger event sent.")
+        log.debug("Beacon trigger event sent with RSSI: \(rssi ?? 0).")
     }
     
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: any Error) {

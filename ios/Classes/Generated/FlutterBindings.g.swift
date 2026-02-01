@@ -540,6 +540,7 @@ struct ActiveBeaconWire: Hashable {
   var uuid: String
   var major: Int64? = nil
   var minor: Int64? = nil
+  var rssi: Int64? = nil
   var triggers: [BeaconEvent]
   var androidSettings: AndroidBeaconSettingsWire? = nil
 
@@ -550,14 +551,16 @@ struct ActiveBeaconWire: Hashable {
     let uuid = pigeonVar_list[1] as! String
     let major: Int64? = nilOrValue(pigeonVar_list[2])
     let minor: Int64? = nilOrValue(pigeonVar_list[3])
-    let triggers = pigeonVar_list[4] as! [BeaconEvent]
-    let androidSettings: AndroidBeaconSettingsWire? = nilOrValue(pigeonVar_list[5])
+    let rssi: Int64? = nilOrValue(pigeonVar_list[4])
+    let triggers = pigeonVar_list[5] as! [BeaconEvent]
+    let androidSettings: AndroidBeaconSettingsWire? = nilOrValue(pigeonVar_list[6])
 
     return ActiveBeaconWire(
       id: id,
       uuid: uuid,
       major: major,
       minor: minor,
+      rssi: rssi,
       triggers: triggers,
       androidSettings: androidSettings
     )
@@ -568,6 +571,7 @@ struct ActiveBeaconWire: Hashable {
       uuid,
       major,
       minor,
+      rssi,
       triggers,
       androidSettings,
     ]

@@ -525,6 +525,7 @@ data class ActiveBeaconWire (
   val uuid: String,
   val major: Long? = null,
   val minor: Long? = null,
+  val rssi: Long? = null,
   val triggers: List<BeaconEvent>,
   val androidSettings: AndroidBeaconSettingsWire? = null
 )
@@ -535,9 +536,10 @@ data class ActiveBeaconWire (
       val uuid = pigeonVar_list[1] as String
       val major = pigeonVar_list[2] as Long?
       val minor = pigeonVar_list[3] as Long?
-      val triggers = pigeonVar_list[4] as List<BeaconEvent>
-      val androidSettings = pigeonVar_list[5] as AndroidBeaconSettingsWire?
-      return ActiveBeaconWire(id, uuid, major, minor, triggers, androidSettings)
+      val rssi = pigeonVar_list[4] as Long?
+      val triggers = pigeonVar_list[5] as List<BeaconEvent>
+      val androidSettings = pigeonVar_list[6] as AndroidBeaconSettingsWire?
+      return ActiveBeaconWire(id, uuid, major, minor, rssi, triggers, androidSettings)
     }
   }
   fun toList(): List<Any?> {
@@ -546,6 +548,7 @@ data class ActiveBeaconWire (
       uuid,
       major,
       minor,
+      rssi,
       triggers,
       androidSettings,
     )

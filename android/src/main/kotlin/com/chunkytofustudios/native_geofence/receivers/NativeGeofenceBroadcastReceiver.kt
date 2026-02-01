@@ -129,6 +129,7 @@ class NativeGeofenceBroadcastReceiver : BroadcastReceiver() {
         return BeaconCallbackParamsWire(
             listOf(ActiveBeaconWire(
                 beaconWire.id, beaconWire.uuid, beaconWire.major, beaconWire.minor,
+                null,
                 beaconWire.triggers, beaconWire.androidSettings
             )),
             event,
