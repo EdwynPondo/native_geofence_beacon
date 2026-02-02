@@ -23,9 +23,7 @@ import com.chunkytofustudios.native_geofence.util.GeofenceEvents
 import com.chunkytofustudios.native_geofence.util.LocationWires
 import com.chunkytofustudios.native_geofence.util.NativeBeaconPersistence
 import com.google.android.gms.location.GeofencingEvent
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.altbeacon.beacon.BeaconManager
 import org.altbeacon.beacon.MonitorNotifier
 import org.altbeacon.beacon.Region
 

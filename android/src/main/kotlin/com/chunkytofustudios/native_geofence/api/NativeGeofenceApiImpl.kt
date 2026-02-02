@@ -31,6 +31,7 @@ import org.altbeacon.beacon.BeaconManager
 import org.altbeacon.beacon.MonitorNotifier
 import org.altbeacon.beacon.Region
 import java.io.Serializable
+import androidx.core.content.edit
 
 class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, NativeBeaconApi, MonitorNotifier, org.altbeacon.beacon.RangeNotifier {
     companion object {
@@ -43,7 +44,6 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
     private val beaconManager = BeaconManager.getInstanceForApplication(context).apply {
         // Support iBeacon
         beaconParsers.add(org.altbeacon.beacon.BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"))
-        
         // Register this instance as a monitor notifier to receive enter/exit events
         addMonitorNotifier(this@NativeGeofenceApiImpl)
         // Register this instance as a range notifier to receive RSSI events
@@ -52,10 +52,13 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
 
     override fun initialize(callbackDispatcherHandle: Long) {
         context.getSharedPreferences(Constants.SHARED_PREFERENCES_KEY, Context.MODE_PRIVATE)
-            .edit()
-            .putLong(Constants.CALLBACK_DISPATCHER_HANDLE_KEY, callbackDispatcherHandle)
-            .putLong(Constants.BEACON_CALLBACK_DISPATCHER_HANDLE_KEY, callbackDispatcherHandle)
-            .apply()
+            .edit {
+                putLong(Constants.CALLBACK_DISPATCHER_HANDLE_KEY, callbackDispatcherHandle)
+                    .putLong(
+                        Constants.BEACON_CALLBACK_DISPATCHER_HANDLE_KEY,
+                        callbackDispatcherHandle
+                    )
+            }
         Log.d(TAG, "Initialized consolidated NativeGeofenceApi and NativeBeaconApi.")
     }
 
