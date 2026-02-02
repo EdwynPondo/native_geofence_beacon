@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import com.chunkytofustudios.native_geofence.Constants
 import com.chunkytofustudios.native_geofence.generated.ActiveBeaconWire
 import com.chunkytofustudios.native_geofence.generated.ActiveGeofenceWire
+import com.chunkytofustudios.native_geofence.generated.AndroidScannerSettingsWire
 import com.chunkytofustudios.native_geofence.generated.BeaconWire
 import com.chunkytofustudios.native_geofence.generated.FlutterError
 import com.chunkytofustudios.native_geofence.generated.GeofenceWire
@@ -41,6 +42,10 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
 
     private val geofencingClient = LocationServices.getGeofencingClient(context)
     private val enteredBeaconRegions = mutableSetOf<String>()
+    
+    // Restore scanner settings if available
+    private val initialScannerSettings = NativeBeaconPersistence.getScannerSettings(context)
+
     private val beaconManager = BeaconManager.getInstanceForApplication(context).apply {
         // Support iBeacon
         beaconParsers.add(org.altbeacon.beacon.BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"))
@@ -48,6 +53,19 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
         addMonitorNotifier(this@NativeGeofenceApiImpl)
         // Register this instance as a range notifier to receive RSSI events
         addRangeNotifier(this@NativeGeofenceApiImpl)
+
+        if (initialScannerSettings != null) {
+            foregroundScanPeriod = initialScannerSettings.foregroundScanPeriodMillis
+            foregroundBetweenScanPeriod = initialScannerSettings.foregroundBetweenScanPeriodMillis
+            backgroundScanPeriod = initialScannerSettings.backgroundScanPeriodMillis
+            backgroundBetweenScanPeriod = initialScannerSettings.backgroundBetweenScanPeriodMillis
+            try {
+                updateScanPeriods()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed into updateScanPeriods during init: $e")
+            }
+            Log.d(TAG, "Restored Android scan periods from storage.")
+        }
     }
 
     override fun initialize(callbackDispatcherHandle: Long) {
@@ -59,6 +77,7 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
                         callbackDispatcherHandle
                     )
             }
+        
         Log.d(TAG, "Initialized consolidated NativeGeofenceApi and NativeBeaconApi.")
     }
 
@@ -194,6 +213,36 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
             }
             NativeBeaconPersistence.removeAllBeacons(context)
             Log.d(TAG, "Removed all beacons.")
+            callback.invoke(Result.success(Unit))
+        } catch (e: Exception) {
+            callback.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.PLUGIN_INTERNAL.raw.toString(), e.toString())))
+        }
+    }
+
+    override fun configureAndroidMonitor(
+        settings: AndroidScannerSettingsWire,
+        callback: (Result<Unit>) -> Unit
+    ) {
+        try {
+            beaconManager.foregroundScanPeriod = settings.foregroundScanPeriodMillis
+            beaconManager.foregroundBetweenScanPeriod = settings.foregroundBetweenScanPeriodMillis
+            beaconManager.backgroundScanPeriod = settings.backgroundScanPeriodMillis
+            beaconManager.backgroundBetweenScanPeriod = settings.backgroundBetweenScanPeriodMillis
+            
+            try {
+                beaconManager.updateScanPeriods()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed into updateScanPeriods: $e")
+                // usage of updateScanPeriods sometimes throws if not bound, 
+                // but setting the fields should be enough for next scan cycle.
+            }
+            
+            Log.d(TAG, "Configured Android scan periods: " +
+                    "Foreground(Scan=${settings.foregroundScanPeriodMillis}ms, Between=${settings.foregroundBetweenScanPeriodMillis}ms), " +
+                    "Background(Scan=${settings.backgroundScanPeriodMillis}ms, Between=${settings.backgroundBetweenScanPeriodMillis}ms)")
+            
+            NativeBeaconPersistence.saveScannerSettings(context, settings)
+            
             callback.invoke(Result.success(Unit))
         } catch (e: Exception) {
             callback.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.PLUGIN_INTERNAL.raw.toString(), e.toString())))

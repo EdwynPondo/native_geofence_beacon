@@ -451,30 +451,59 @@ struct IosBeaconSettingsWire: Hashable {
 /// Generated class from Pigeon that represents data sent in messages.
 struct AndroidBeaconSettingsWire: Hashable {
   var initialTriggers: [BeaconEvent]
-  var scanPeriodMillis: Int64
-  var betweenScanPeriodMillis: Int64
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> AndroidBeaconSettingsWire? {
     let initialTriggers = pigeonVar_list[0] as! [BeaconEvent]
-    let scanPeriodMillis = pigeonVar_list[1] as! Int64
-    let betweenScanPeriodMillis = pigeonVar_list[2] as! Int64
 
     return AndroidBeaconSettingsWire(
-      initialTriggers: initialTriggers,
-      scanPeriodMillis: scanPeriodMillis,
-      betweenScanPeriodMillis: betweenScanPeriodMillis
+      initialTriggers: initialTriggers
     )
   }
   func toList() -> [Any?] {
     return [
-      initialTriggers,
-      scanPeriodMillis,
-      betweenScanPeriodMillis,
+      initialTriggers
     ]
   }
   static func == (lhs: AndroidBeaconSettingsWire, rhs: AndroidBeaconSettingsWire) -> Bool {
+    return deepEqualsFlutterBindings(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashFlutterBindings(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct AndroidScannerSettingsWire: Hashable {
+  var foregroundScanPeriodMillis: Int64
+  var foregroundBetweenScanPeriodMillis: Int64
+  var backgroundScanPeriodMillis: Int64
+  var backgroundBetweenScanPeriodMillis: Int64
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> AndroidScannerSettingsWire? {
+    let foregroundScanPeriodMillis = pigeonVar_list[0] as! Int64
+    let foregroundBetweenScanPeriodMillis = pigeonVar_list[1] as! Int64
+    let backgroundScanPeriodMillis = pigeonVar_list[2] as! Int64
+    let backgroundBetweenScanPeriodMillis = pigeonVar_list[3] as! Int64
+
+    return AndroidScannerSettingsWire(
+      foregroundScanPeriodMillis: foregroundScanPeriodMillis,
+      foregroundBetweenScanPeriodMillis: foregroundBetweenScanPeriodMillis,
+      backgroundScanPeriodMillis: backgroundScanPeriodMillis,
+      backgroundBetweenScanPeriodMillis: backgroundBetweenScanPeriodMillis
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      foregroundScanPeriodMillis,
+      foregroundBetweenScanPeriodMillis,
+      backgroundScanPeriodMillis,
+      backgroundBetweenScanPeriodMillis,
+    ]
+  }
+  static func == (lhs: AndroidScannerSettingsWire, rhs: AndroidScannerSettingsWire) -> Bool {
     return deepEqualsFlutterBindings(lhs.toList(), rhs.toList())  }
   func hash(into hasher: inout Hasher) {
     deepHashFlutterBindings(value: toList(), hasher: &hasher)
@@ -654,10 +683,12 @@ private class FlutterBindingsPigeonCodecReader: FlutterStandardReader {
     case 139:
       return AndroidBeaconSettingsWire.fromList(self.readValue() as! [Any?])
     case 140:
-      return BeaconWire.fromList(self.readValue() as! [Any?])
+      return AndroidScannerSettingsWire.fromList(self.readValue() as! [Any?])
     case 141:
-      return ActiveBeaconWire.fromList(self.readValue() as! [Any?])
+      return BeaconWire.fromList(self.readValue() as! [Any?])
     case 142:
+      return ActiveBeaconWire.fromList(self.readValue() as! [Any?])
+    case 143:
       return BeaconCallbackParamsWire.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -700,14 +731,17 @@ private class FlutterBindingsPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? AndroidBeaconSettingsWire {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? BeaconWire {
+    } else if let value = value as? AndroidScannerSettingsWire {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? ActiveBeaconWire {
+    } else if let value = value as? BeaconWire {
       super.writeByte(141)
       super.writeValue(value.toList())
-    } else if let value = value as? BeaconCallbackParamsWire {
+    } else if let value = value as? ActiveBeaconWire {
       super.writeByte(142)
+      super.writeValue(value.toList())
+    } else if let value = value as? BeaconCallbackParamsWire {
+      super.writeByte(143)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -948,6 +982,7 @@ protocol NativeBeaconApi {
   func getBeacons() throws -> [ActiveBeaconWire]
   func removeBeaconById(id: String, completion: @escaping (Result<Void, Error>) -> Void)
   func removeAllBeacons(completion: @escaping (Result<Void, Error>) -> Void)
+  func configureAndroidMonitor(settings: AndroidScannerSettingsWire, completion: @escaping (Result<Void, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -1058,6 +1093,23 @@ class NativeBeaconApiSetup {
       }
     } else {
       removeAllBeaconsChannel.setMessageHandler(nil)
+    }
+    let configureAndroidMonitorChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.native_geofence.NativeBeaconApi.configureAndroidMonitor\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      configureAndroidMonitorChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let settingsArg = args[0] as! AndroidScannerSettingsWire
+        api.configureAndroidMonitor(settings: settingsArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      configureAndroidMonitorChannel.setMessageHandler(nil)
     }
   }
 }

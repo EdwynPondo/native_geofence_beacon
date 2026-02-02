@@ -9,6 +9,7 @@ class Constants {
         const val PERSISTENT_GEOFENCE_KEY_PREFIX = "persistent_geofence/"
         const val PERSISTENT_BEACONS_IDS_KEY = "persistent_beacons_ids"
         const val PERSISTENT_BEACON_KEY_PREFIX = "persistent_beacon/"
+        const val PERSISTENT_SCANNER_SETTINGS_KEY = "persistent_scanner_settings"
 
         const val CALLBACK_HANDLE_KEY = "$PACKAGE_NAME.callback_handle"
         const val CALLBACK_DISPATCHER_HANDLE_KEY = "callback_dispatch_handler"

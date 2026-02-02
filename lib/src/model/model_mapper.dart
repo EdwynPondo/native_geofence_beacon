@@ -190,8 +190,6 @@ extension AndroidBeaconSettingsMapper on AndroidBeaconSettings {
   AndroidBeaconSettingsWire toWire() {
     return AndroidBeaconSettingsWire(
       initialTriggers: initialTriggers.toList(),
-      scanPeriodMillis: scanPeriod.inMilliseconds,
-      betweenScanPeriodMillis: betweenScanPeriod.inMilliseconds,
     );
   }
 }
@@ -200,8 +198,19 @@ extension AndroidBeaconSettingsWireMapper on AndroidBeaconSettingsWire {
   AndroidBeaconSettings fromWire() {
     return AndroidBeaconSettings(
       initialTriggers: initialTriggers.toSet(),
-      scanPeriod: Duration(milliseconds: scanPeriodMillis),
-      betweenScanPeriod: Duration(milliseconds: betweenScanPeriodMillis),
+    );
+  }
+}
+
+extension AndroidScannerSettingsMapper on AndroidScannerSettings {
+  AndroidScannerSettingsWire toWire() {
+    return AndroidScannerSettingsWire(
+      foregroundScanPeriodMillis: foregroundScanPeriod.inMilliseconds,
+      foregroundBetweenScanPeriodMillis:
+          foregroundBetweenScanPeriod.inMilliseconds,
+      backgroundScanPeriodMillis: backgroundScanPeriod.inMilliseconds,
+      backgroundBetweenScanPeriodMillis:
+          backgroundBetweenScanPeriod.inMilliseconds,
     );
   }
 }

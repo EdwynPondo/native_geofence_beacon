@@ -185,4 +185,9 @@ public class NativeGeofenceApiImpl: NSObject, NativeGeofenceApi, NativeBeaconApi
         log.debug("Removed \(removedCount) beacon(s).")
         completion(.success(()))
     }
+    
+    func configureAndroidMonitor(settings: AndroidScannerSettingsWire, completion: @escaping (Result<Void, any Error>) -> Void) {
+        // This method is Android specific and does nothing on iOS.
+        completion(.success(()))
+    }
 }

@@ -225,13 +225,23 @@ class IosBeaconSettingsWire {
 
 class AndroidBeaconSettingsWire {
   final List<BeaconEvent> initialTriggers;
-  final int scanPeriodMillis;
-  final int betweenScanPeriodMillis;
 
   const AndroidBeaconSettingsWire({
     required this.initialTriggers,
-    required this.scanPeriodMillis,
-    required this.betweenScanPeriodMillis,
+  });
+}
+
+class AndroidScannerSettingsWire {
+  final int foregroundScanPeriodMillis;
+  final int foregroundBetweenScanPeriodMillis;
+  final int backgroundScanPeriodMillis;
+  final int backgroundBetweenScanPeriodMillis;
+
+  const AndroidScannerSettingsWire({
+    required this.foregroundScanPeriodMillis,
+    required this.foregroundBetweenScanPeriodMillis,
+    required this.backgroundScanPeriodMillis,
+    required this.backgroundBetweenScanPeriodMillis,
   });
 }
 
@@ -307,6 +317,9 @@ abstract class NativeBeaconApi {
 
   @async
   void removeAllBeacons();
+
+  @async
+  void configureAndroidMonitor({required AndroidScannerSettingsWire settings});
 }
 
 @HostApi()

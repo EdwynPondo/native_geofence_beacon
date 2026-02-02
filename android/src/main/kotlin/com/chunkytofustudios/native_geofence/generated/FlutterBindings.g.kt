@@ -438,28 +438,59 @@ data class IosBeaconSettingsWire (
 
 /** Generated class from Pigeon that represents data sent in messages. */
 data class AndroidBeaconSettingsWire (
-  val initialTriggers: List<BeaconEvent>,
-  val scanPeriodMillis: Long,
-  val betweenScanPeriodMillis: Long
+  val initialTriggers: List<BeaconEvent>
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): AndroidBeaconSettingsWire {
       val initialTriggers = pigeonVar_list[0] as List<BeaconEvent>
-      val scanPeriodMillis = pigeonVar_list[1] as Long
-      val betweenScanPeriodMillis = pigeonVar_list[2] as Long
-      return AndroidBeaconSettingsWire(initialTriggers, scanPeriodMillis, betweenScanPeriodMillis)
+      return AndroidBeaconSettingsWire(initialTriggers)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       initialTriggers,
-      scanPeriodMillis,
-      betweenScanPeriodMillis,
     )
   }
   override fun equals(other: Any?): Boolean {
     if (other !is AndroidBeaconSettingsWire) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return FlutterBindingsPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class AndroidScannerSettingsWire (
+  val foregroundScanPeriodMillis: Long,
+  val foregroundBetweenScanPeriodMillis: Long,
+  val backgroundScanPeriodMillis: Long,
+  val backgroundBetweenScanPeriodMillis: Long
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): AndroidScannerSettingsWire {
+      val foregroundScanPeriodMillis = pigeonVar_list[0] as Long
+      val foregroundBetweenScanPeriodMillis = pigeonVar_list[1] as Long
+      val backgroundScanPeriodMillis = pigeonVar_list[2] as Long
+      val backgroundBetweenScanPeriodMillis = pigeonVar_list[3] as Long
+      return AndroidScannerSettingsWire(foregroundScanPeriodMillis, foregroundBetweenScanPeriodMillis, backgroundScanPeriodMillis, backgroundBetweenScanPeriodMillis)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      foregroundScanPeriodMillis,
+      foregroundBetweenScanPeriodMillis,
+      backgroundScanPeriodMillis,
+      backgroundBetweenScanPeriodMillis,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is AndroidScannerSettingsWire) {
       return false
     }
     if (this === other) {
@@ -658,15 +689,20 @@ private open class FlutterBindingsPigeonCodec : StandardMessageCodec() {
       }
       140.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          BeaconWire.fromList(it)
+          AndroidScannerSettingsWire.fromList(it)
         }
       }
       141.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          ActiveBeaconWire.fromList(it)
+          BeaconWire.fromList(it)
         }
       }
       142.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          ActiveBeaconWire.fromList(it)
+        }
+      }
+      143.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BeaconCallbackParamsWire.fromList(it)
         }
@@ -720,16 +756,20 @@ private open class FlutterBindingsPigeonCodec : StandardMessageCodec() {
         stream.write(139)
         writeValue(stream, value.toList())
       }
-      is BeaconWire -> {
+      is AndroidScannerSettingsWire -> {
         stream.write(140)
         writeValue(stream, value.toList())
       }
-      is ActiveBeaconWire -> {
+      is BeaconWire -> {
         stream.write(141)
         writeValue(stream, value.toList())
       }
-      is BeaconCallbackParamsWire -> {
+      is ActiveBeaconWire -> {
         stream.write(142)
+        writeValue(stream, value.toList())
+      }
+      is BeaconCallbackParamsWire -> {
+        stream.write(143)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -980,6 +1020,7 @@ interface NativeBeaconApi {
   fun getBeacons(): List<ActiveBeaconWire>
   fun removeBeaconById(id: String, callback: (Result<Unit>) -> Unit)
   fun removeAllBeacons(callback: (Result<Unit>) -> Unit)
+  fun configureAndroidMonitor(settings: AndroidScannerSettingsWire, callback: (Result<Unit>) -> Unit)
 
   companion object {
     /** The codec used by NativeBeaconApi. */
@@ -1097,6 +1138,25 @@ interface NativeBeaconApi {
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             api.removeAllBeacons{ result: Result<Unit> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(FlutterBindingsPigeonUtils.wrapError(error))
+              } else {
+                reply.reply(FlutterBindingsPigeonUtils.wrapResult(null))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.native_geofence.NativeBeaconApi.configureAndroidMonitor$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val settingsArg = args[0] as AndroidScannerSettingsWire
+            api.configureAndroidMonitor(settingsArg) { result: Result<Unit> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(FlutterBindingsPigeonUtils.wrapError(error))

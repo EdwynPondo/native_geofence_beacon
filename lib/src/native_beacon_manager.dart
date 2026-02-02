@@ -162,4 +162,16 @@ class NativeBeaconManager {
   Future<void> removeAllBeacons() async => _api
       .removeAllBeacons()
       .catchError(NativeGeofenceExceptionMapper.catchError<void>);
+
+  /// Configure Android beacon scanner settings.
+  ///
+  /// This method is only available on Android. On iOS it does nothing.
+  ///
+  /// Throws [NativeGeofenceException].
+  Future<void> configureAndroidMonitor(
+    AndroidScannerSettings settings,
+  ) async =>
+      _api
+          .configureAndroidMonitor(settings: settings.toWire())
+          .catchError(NativeGeofenceExceptionMapper.catchError<void>);
 }

@@ -3,7 +3,9 @@ package com.chunkytofustudios.native_geofence.util
 import android.content.Context
 import android.util.Log
 import com.chunkytofustudios.native_geofence.Constants
+import com.chunkytofustudios.native_geofence.generated.AndroidScannerSettingsWire
 import com.chunkytofustudios.native_geofence.generated.BeaconWire
+import com.chunkytofustudios.native_geofence.model.AndroidScannerSettingsStorage
 import com.chunkytofustudios.native_geofence.model.BeaconStorage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
@@ -143,6 +145,41 @@ class NativeBeaconPersistence {
                 }
                 editor.apply()
                 Log.d(TAG, "Removed ${persistentBeacons.size} Beacons from storage.")
+                editor.apply()
+                Log.d(TAG, "Removed ${persistentBeacons.size} Beacons from storage.")
+            }
+        }
+
+        @JvmStatic
+        fun saveScannerSettings(context: Context, settings: AndroidScannerSettingsWire) {
+            synchronized(sharedPreferencesLock) {
+                val jsonData = Json.encodeToString(AndroidScannerSettingsStorage.fromWire(settings))
+                context.getSharedPreferences(Constants.SHARED_PREFERENCES_KEY, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(Constants.PERSISTENT_SCANNER_SETTINGS_KEY, jsonData)
+                    .apply()
+                Log.d(TAG, "Saved Scanner Settings to storage.")
+            }
+        }
+
+        @JvmStatic
+        fun getScannerSettings(context: Context): AndroidScannerSettingsWire? {
+            synchronized(sharedPreferencesLock) {
+                val p = context.getSharedPreferences(
+                    Constants.SHARED_PREFERENCES_KEY,
+                    Context.MODE_PRIVATE
+                )
+                val jsonData = p.getString(Constants.PERSISTENT_SCANNER_SETTINGS_KEY, null)
+                if (jsonData == null) {
+                    return null
+                }
+                return try {
+                    val settingsStorage = Json.decodeFromString<AndroidScannerSettingsStorage>(jsonData)
+                    settingsStorage.toWire()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse Scanner Settings from storage. Data=${jsonData}")
+                    null
+                }
             }
         }
     }

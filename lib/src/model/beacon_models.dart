@@ -35,24 +35,45 @@ class AndroidBeaconSettings {
   /// created and NOT every time the plugin is initialized.
   final Set<BeaconEvent> initialTriggers;
 
-  /// The duration to scan for beacons.
-  final Duration scanPeriod;
-
-  /// The duration to wait between beacon scans.
-  final Duration betweenScanPeriod;
-
   const AndroidBeaconSettings({
     required this.initialTriggers,
-    this.scanPeriod = const Duration(milliseconds: 1100),
-    this.betweenScanPeriod = const Duration(seconds: 0),
   });
 
   @override
   String toString() {
     return 'AndroidBeaconSettings('
-        'initialTriggers: [${initialTriggers.map((e) => e.name).join(',')}], '
-        'scanPeriod: ${scanPeriod.inMilliseconds}ms, '
-        'betweenScanPeriod: ${betweenScanPeriod.inMilliseconds}ms)';
+        'initialTriggers: [${initialTriggers.map((e) => e.name).join(',')}])';
+  }
+}
+
+/// Android specific Scanner settings.
+class AndroidScannerSettings {
+  /// The duration to scan for beacons when the app is in the foreground.
+  final Duration foregroundScanPeriod;
+
+  /// The duration to wait between beacon scans when the app is in the foreground.
+  final Duration foregroundBetweenScanPeriod;
+
+  /// The duration to scan for beacons when the app is in the background.
+  final Duration backgroundScanPeriod;
+
+  /// The duration to wait between beacon scans when the app is in the background.
+  final Duration backgroundBetweenScanPeriod;
+
+  const AndroidScannerSettings({
+    this.foregroundScanPeriod = const Duration(milliseconds: 1100),
+    this.foregroundBetweenScanPeriod = const Duration(seconds: 0),
+    this.backgroundScanPeriod = const Duration(milliseconds: 1100),
+    this.backgroundBetweenScanPeriod = const Duration(seconds: 0),
+  });
+
+  @override
+  String toString() {
+    return 'AndroidScannerSettings('
+        'foregroundScanPeriod: ${foregroundScanPeriod.inMilliseconds}ms, '
+        'foregroundBetweenScanPeriod: ${foregroundBetweenScanPeriod.inMilliseconds}ms, '
+        'backgroundScanPeriod: ${backgroundScanPeriod.inMilliseconds}ms, '
+        'backgroundBetweenScanPeriod: ${backgroundBetweenScanPeriod.inMilliseconds}ms)';
   }
 }
 
