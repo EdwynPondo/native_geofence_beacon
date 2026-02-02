@@ -39,6 +39,7 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
     }
 
     private val geofencingClient = LocationServices.getGeofencingClient(context)
+    private val enteredBeaconRegions = mutableSetOf<String>()
     private val beaconManager = BeaconManager.getInstanceForApplication(context).apply {
         // Support iBeacon
         beaconParsers.add(org.altbeacon.beacon.BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"))
@@ -345,12 +346,18 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
     // --- MonitorNotifier Implementation ---
 
     override fun didEnterRegion(region: Region) {
+        if (enteredBeaconRegions.contains(region.uniqueId)) {
+            Log.d(TAG, "Ignoring duplicate didEnterRegion for ${region.uniqueId}")
+            return
+        }
+        enteredBeaconRegions.add(region.uniqueId)
         Log.d(TAG, "didEnterRegion: ${region.uniqueId}")
         // Match iOS: Start ranging to get RSSI, do not broadcast Enter yet.
         beaconManager.startRangingBeacons(region)
     }
 
     override fun didExitRegion(region: Region) {
+        enteredBeaconRegions.remove(region.uniqueId)
         Log.d(TAG, "didExitRegion: ${region.uniqueId}")
         // Match iOS: Stop ranging and broadcast Exit.
         beaconManager.stopRangingBeacons(region)
