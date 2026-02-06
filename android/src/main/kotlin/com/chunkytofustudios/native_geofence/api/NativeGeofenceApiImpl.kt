@@ -29,43 +29,19 @@ import com.chunkytofustudios.native_geofence.util.NativeGeofencePersistence
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 import org.altbeacon.beacon.BeaconManager
-import org.altbeacon.beacon.MonitorNotifier
 import org.altbeacon.beacon.Region
-import java.io.Serializable
 import androidx.core.content.edit
 
-class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, NativeBeaconApi, MonitorNotifier, org.altbeacon.beacon.RangeNotifier {
+class NativeGeofenceApiImpl(
+    private val context: Context,
+    private val beaconManager: BeaconManager
+) : NativeGeofenceApi, NativeBeaconApi {
     companion object {
         @JvmStatic
         private val TAG = "NativeGeofenceApiImpl"
     }
 
     private val geofencingClient = LocationServices.getGeofencingClient(context)
-    
-    // Restore scanner settings if available
-    private val initialScannerSettings = NativeBeaconPersistence.getScannerSettings(context)
-
-    private val beaconManager = BeaconManager.getInstanceForApplication(context).apply {
-        // Support iBeacon
-        beaconParsers.add(org.altbeacon.beacon.BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"))
-        // Register this instance as a monitor notifier to receive enter/exit events
-        addMonitorNotifier(this@NativeGeofenceApiImpl)
-        // Register this instance as a range notifier to receive RSSI events
-        addRangeNotifier(this@NativeGeofenceApiImpl)
-
-        if (initialScannerSettings != null) {
-            foregroundScanPeriod = initialScannerSettings.foregroundScanPeriodMillis
-            foregroundBetweenScanPeriod = initialScannerSettings.foregroundBetweenScanPeriodMillis
-            backgroundScanPeriod = initialScannerSettings.backgroundScanPeriodMillis
-            backgroundBetweenScanPeriod = initialScannerSettings.backgroundBetweenScanPeriodMillis
-            try {
-                updateScanPeriods()
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed into updateScanPeriods during init: $e")
-            }
-            Log.d(TAG, "Restored Android scan periods from storage.")
-        }
-    }
 
     override fun initialize(callbackDispatcherHandle: Long) {
         context.getSharedPreferences(Constants.SHARED_PREFERENCES_KEY, Context.MODE_PRIVATE)
@@ -392,47 +368,5 @@ class NativeGeofenceApiImpl(private val context: Context) : NativeGeofenceApi, N
             Log.e(TAG, "Failed to start monitoring Beacon ID=${beacon.id}: $e")
             callback?.invoke(Result.failure(FlutterError(NativeGeofenceErrorCode.PLUGIN_INTERNAL.raw.toString(), e.toString())))
         }
-    }
-
-    // --- MonitorNotifier Implementation ---
-
-    override fun didEnterRegion(region: Region) {
-        Log.d(TAG, "didEnterRegion: ${region.uniqueId}")
-        // Match iOS: Start ranging to get RSSI, do not broadcast Enter yet.
-        beaconManager.startRangingBeacons(region)
-    }
-
-    override fun didExitRegion(region: Region) {
-        Log.d(TAG, "didExitRegion: ${region.uniqueId}")
-        // Match iOS: Stop ranging and broadcast Exit.
-        beaconManager.stopRangingBeacons(region)
-        triggerBeaconBroadcast(region, MonitorNotifier.OUTSIDE)
-    }
-
-    override fun didDetermineStateForRegion(state: Int, region: Region) {
-        Log.d(TAG, "didDetermineStateForRegion: $state for ${region.uniqueId}")
-    }
-
-    // --- RangeNotifier Implementation ---
-
-    override fun didRangeBeaconsInRegion(beacons: MutableCollection<org.altbeacon.beacon.Beacon>?, region: Region?) {
-        if (beacons != null && region != null && beacons.isNotEmpty()) {
-            val beacon = beacons.first()
-            Log.d(TAG, "didRangeBeaconsInRegion: ${region.uniqueId}, rssi=${beacon.rssi}")
-            // Match iOS: Send Enter event with RSSI, then stop ranging immediately.
-            triggerBeaconBroadcast(region, MonitorNotifier.INSIDE, beacon.rssi)
-            beaconManager.stopRangingBeacons(region)
-        }
-    }
-
-    private fun triggerBeaconBroadcast(region: Region, state: Int, rssi: Int? = null) {
-        val intent = Intent(context, NativeGeofenceBroadcastReceiver::class.java).apply {
-            putExtra("state", state)
-            putExtra("org.altbeacon.beacon.Region", region as Serializable)
-            if (rssi != null) {
-                putExtra("rssi", rssi)
-            }
-        }
-        context.sendBroadcast(intent)
     }
 }
